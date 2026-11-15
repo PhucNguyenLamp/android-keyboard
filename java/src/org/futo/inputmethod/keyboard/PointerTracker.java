@@ -853,6 +853,11 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         // at {@link #setKeyboard}. In those cases, we should update key according
         // to the new keyboard layout.
         Key key = newKey;
+        final int newCode = key.getCode();
+        if (newCode >= Constants.CODE_ACTION_0 && newCode <= Constants.CODE_ACTION_MAX) {
+            // Action keys (e.g. the bottom emoji key) only trigger on a direct press.
+            return;
+        }
         if (callListenerOnPressAndCheckKeyboardLayoutChange(key, 0 /* repeatCount */)) {
             key = onMoveKey(x, y);
         }
