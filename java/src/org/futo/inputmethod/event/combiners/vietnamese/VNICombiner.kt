@@ -36,7 +36,7 @@ class VNICombiner: Combiner {
         if (!(keypress in 'A'..'Z' || keypress in 'a'..'z')) {
             if (!TextUtils.isEmpty(buffer)) {
                 if (event.mKeyCode == Constants.CODE_DELETE) {
-                    buffer.setLength(buffer.length - 1)
+                    smartBackspace()
                     return Event.createConsumedEvent(event)
                 }
             }
@@ -47,6 +47,33 @@ class VNICombiner: Combiner {
 
         buffer.append(keypress)
         return Event.createConsumedEvent(event)
+    }
+
+    /**
+     * Backspace behaves like UniKey: it deletes the last displayed character (one code point),
+     * then rebuilds the raw VNI keys for the remaining word so it can still be edited.
+     * For example "chào" -> "chà" -> "ch", and "đường" -> "đườn" -> "đườ".
+     */
+    private fun smartBackspace() {
+        val text = try {
+            VNI.convert(buffer.toString()).text
+        } catch (e: Exception) {
+            null
+        }
+
+        if (text == null) {
+            if (buffer.isNotEmpty()) buffer.deleteCharAt(buffer.length - 1)
+            return
+        }
+        if (text.isEmpty()) {
+            buffer.clear()
+            return
+        }
+
+        val lastCodePoint = text.codePointBefore(text.length)
+        val newText = text.substring(0, text.length - Character.charCount(lastCodePoint))
+        buffer.setLength(0)
+        buffer.append(VNI.vietnameseToVNI(newText))
     }
 
     override fun getCombiningStateFeedback(): CharSequence? =

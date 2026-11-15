@@ -56,6 +56,7 @@ public final class WordComposer {
 
     private CombinerChain mCombinerChain;
     private String mCombiningSpec; // Memory so that we don't uselessly recreate the combiner chain
+    private List<CombinerKind> mCombinerKinds = Collections.emptyList();
 
     // The list of events that served to compose this string.
     private final ArrayList<Event> mEvents;
@@ -121,6 +122,38 @@ public final class WordComposer {
     public void setCombiners(@NotNull List<@NotNull CombinerKind> combiners) {
         mCombinerChain = new CombinerChain(combiners,
                 mCombinerChain.getComposingWordWithCombiningFeedback().toString());
+        mCombinerKinds = combiners;
+    }
+
+    public boolean hasVniCombiner() {
+        return mCombinerKinds.contains(CombinerKind.VNI);
+    }
+
+    /**
+     * Seed the composing word from raw (as-typed) key characters, replaying them through the
+     * combiner chain as if they had just been typed. This restores the combiner's internal
+     * buffer so that later modifier keys can still apply to an already-committed word.
+     */
+    public boolean resumeComposingWithRawKeys(final String raw) {
+        reset(true);
+        for (int i = 0; i < raw.length(); i += Character.charCount(raw.codePointAt(i))) {
+            int codePoint = raw.codePointAt(i);
+            // The VNI combiner treats only fullwidth digits as modifiers; ASCII digits are passed
+            // through literally. Our reconstructed raw keys use ASCII digits, so widen them here.
+            if (codePoint >= '0' && codePoint <= '9') {
+                codePoint += 0xFEE0;
+            }
+            final Event processedEvent = processEvent(Event.createSoftwareKeypressEvent(
+                    codePoint, Event.NOT_A_KEY_CODE, Constants.NOT_A_COORDINATE,
+                    Constants.NOT_A_COORDINATE, false));
+            if (processedEvent.getEventType() == Event.EVENT_TYPE_STOP_COMPOSING) {
+                reset(true);
+                return false;
+            }
+            applyProcessedEvent(processedEvent);
+        }
+        mIsResumed = true;
+        return true;
     }
 
     /**

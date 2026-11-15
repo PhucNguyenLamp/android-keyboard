@@ -32,6 +32,7 @@ import org.futo.inputmethod.engine.IMEHelper;
 import org.futo.inputmethod.engine.general.GeneralIME;
 import org.futo.inputmethod.event.Event;
 import org.futo.inputmethod.event.InputTransaction;
+import org.futo.inputmethod.event.combiners.vietnamese.VNI;
 import org.futo.inputmethod.keyboard.Keyboard;
 import org.futo.inputmethod.keyboard.KeyboardSwitcher;
 import org.futo.inputmethod.latin.BinaryDictionary;
@@ -111,7 +112,10 @@ public final class InputLogic {
     private final DictionaryFacilitator mDictionaryFacilitator;
 
     public LastComposedWord mLastComposedWord = LastComposedWord.NOT_A_COMPOSED_WORD;
-    
+    // When we delete the separator space after a Vietnamese (VNI) word, remember it so that a
+    // following modifier digit can re-open the previous word and apply to it (UniKey-like).
+    private boolean mReopenVietnameseWordOnNextKey = false;
+
     public final WordComposer mWordComposer;
     public final RichInputConnection mConnection;
     private final RecapitalizeStatus mRecapitalizeStatus = new RecapitalizeStatus();
@@ -662,6 +666,20 @@ public final class InputLogic {
             unlearnWord(mWordComposer.getTypedWord(), settingsValues, Constants.EVENT_BACKSPACE);
             resetComposingWord(settingsValues, false);
         }
+
+        // If we just deleted the space after a VNI word and the user now typed a VNI modifier
+        // digit, re-open the previous word as composing so the modifier can apply to it.
+        if (mReopenVietnameseWordOnNextKey) {
+            mReopenVietnameseWordOnNextKey = false;
+            final int codePoint = event.mCodePoint;
+            if (!mWordComposer.isComposingWord()
+                    && codePoint >= 0xFF10 && codePoint <= 0xFF19
+                    && mWordComposer.hasVniCombiner()
+                    && !mConnection.hasSelection()) {
+                resetComposingWord(settingsValues, true);
+            }
+        }
+
         final Event processedEvent = mWordComposer.processEvent(event);
         final InputTransaction inputTransaction = new InputTransaction(settingsValues,
                 processedEvent, SystemClock.uptimeMillis(), mSpaceState,
@@ -1414,6 +1432,24 @@ public final class InputLogic {
     }
 
     /**
+     * If this backspace is about to delete the separator space that follows a word, and the
+     * current keyboard uses the VNI combiner, arm the next-key hook so that a following modifier
+     * digit can re-open the word (UniKey/iOS-like behavior).
+     */
+    private void maybeArmVietnameseReopen(final SettingsValues settingsValues) {
+        if (!mWordComposer.hasVniCombiner()) return;
+        if (mConnection.hasSelection()) return;
+        if (!settingsValues.mSpacingAndPunctuations.currentLanguageHasSpaces) return;
+        final CharSequence beforeCursor = mConnection.getTextBeforeCursor(2, 0);
+        if (beforeCursor == null || beforeCursor.length() < 2) return;
+        final char last = beforeCursor.charAt(beforeCursor.length() - 1);
+        final char beforeLast = beforeCursor.charAt(beforeCursor.length() - 2);
+        if (last != Constants.CODE_SPACE) return;
+        if (!settingsValues.isWordCodePoint(beforeLast)) return;
+        mReopenVietnameseWordOnNextKey = true;
+    }
+
+    /**
      * Handle a press on the backspace key.
      * @param event The event to handle.
      * @param inputTransaction The transaction in progress.
@@ -1422,6 +1458,7 @@ public final class InputLogic {
             final int currentKeyboardScriptId) {
         mSpaceState = SpaceState.NONE;
         mDeleteCount++;
+        maybeArmVietnameseReopen(inputTransaction.mSettingsValues);
 
         // In many cases after backspace, we need to update the shift state. Normally we need
         // to do this right away to avoid the shift state being out of date in case the user types
@@ -2117,9 +2154,17 @@ public final class InputLogic {
 
         final String typedWordString = range.mWord.toString();
 
-        final int[] codePoints = StringUtils.toCodePointArray(typedWordString);
-        if(!mWordComposer.setComposingWord(codePoints,
-                mImeHelper.getCodepointCoordinates(codePoints))) {
+        final boolean seeded;
+        if (mWordComposer.hasVniCombiner()) {
+            // Reconstruct the VNI keystrokes for the existing (possibly already accented) word and
+            // replay them, so the combiner rebuilds its buffer and later modifiers still apply.
+            seeded = mWordComposer.resumeComposingWithRawKeys(VNI.vietnameseToVNI(typedWordString));
+        } else {
+            final int[] codePoints = StringUtils.toCodePointArray(typedWordString);
+            seeded = mWordComposer.setComposingWord(codePoints,
+                    mImeHelper.getCodepointCoordinates(codePoints));
+        }
+        if (!seeded) {
             return false;
         }
         mWordComposer.setCursorPositionWithinWord(
@@ -2470,6 +2515,7 @@ public final class InputLogic {
     // TODO: how is this different from startInput ?!
     private void resetEntireInputState(final int newSelStart, final int newSelEnd,
             final boolean clearSuggestionStrip) {
+        mReopenVietnameseWordOnNextKey = false;
         final boolean shouldFinishComposition = mWordComposer.isComposingWord();
         resetComposingState(true /* alsoResetLastComposedWord */);
         if (clearSuggestionStrip) {
