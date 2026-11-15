@@ -201,9 +201,37 @@ object VNI {
                     continue
                 }
 
+                // digit 9 (đ) only modifies the onset 'd', so a coda does not affect it.
+                if (digit == 9) {
+                    var target: Letter? = null
+                    for (i in letters.indices.reversed()) {
+                        if (letters[i].base == 'd') {
+                            target = letters[i]
+                            break
+                        }
+                    }
+                    if (target == null) {
+                        tokens.add(DigitToken(ch, rawIndex, false))
+                        literal.add(rawIndex)
+                    } else if (target.diacritic == Diacritic.STROKE) {
+                        target.diacritic = Diacritic.NONE
+                        tokens.add(DigitToken(ch, rawIndex, false))
+                        literal.add(rawIndex)
+                    } else {
+                        target.diacritic = Diacritic.STROKE
+                        tokens.add(DigitToken(ch, rawIndex, true))
+                        appliedStructural.add(rawIndex)
+                    }
+                    continue
+                }
+
+                // Digits 6/7/8 modify the nucleus. If a coda is already typed, the resulting
+                // syllable must be valid ("uoc7" -> "ước" but "oc7" -> "oc7").
+                val changes = ArrayList<Letter>()
+                val newValues = ArrayList<Diacritic>()
+                var toggling = false
+
                 if (digit == 7) {
-                    // Horn applies to a whole "uo" nucleus: "uo" -> "ươ".
-                    // e.g. "nguoi72" -> "người", "tuoi7" -> "tươi", "d9uong72" -> "đường".
                     var hornU: Letter? = null
                     var hornO: Letter? = null
                     for (i in 0 until letters.size - 1) {
@@ -214,57 +242,51 @@ object VNI {
                         }
                     }
                     if (hornU != null && hornO != null) {
-                        if (hornU.diacritic == Diacritic.HORN && hornO.diacritic == Diacritic.HORN) {
-                            hornU.diacritic = Diacritic.NONE
-                            hornO.diacritic = Diacritic.NONE
+                        toggling = hornU.diacritic == Diacritic.HORN && hornO.diacritic == Diacritic.HORN
+                        val value = if (toggling) Diacritic.NONE else Diacritic.HORN
+                        changes.add(hornU); newValues.add(value)
+                        changes.add(hornO); newValues.add(value)
+                    } else {
+                        val single = letters.firstOrNull { it.base == 'u' }
+                                ?: letters.firstOrNull { it.base == 'o' }
+                        if (single == null) {
                             tokens.add(DigitToken(ch, rawIndex, false))
                             literal.add(rawIndex)
-                        } else {
-                            hornU.diacritic = Diacritic.HORN
-                            hornO.diacritic = Diacritic.HORN
-                            tokens.add(DigitToken(ch, rawIndex, true))
-                            appliedStructural.add(rawIndex)
+                            continue
                         }
+                        toggling = single.diacritic == Diacritic.HORN
+                        changes.add(single)
+                        newValues.add(if (toggling) Diacritic.NONE else Diacritic.HORN)
+                    }
+                } else {
+                    var target: Letter? = null
+                    for (i in letters.indices.reversed()) {
+                        if (letters[i].base in COMPATIBLE[digit]!!) {
+                            target = letters[i]
+                            break
+                        }
+                    }
+                    if (target == null) {
+                        tokens.add(DigitToken(ch, rawIndex, false))
+                        literal.add(rawIndex)
                         continue
                     }
-
-                    val single = letters.firstOrNull { it.base == 'u' }
-                            ?: letters.firstOrNull { it.base == 'o' }
-                    if (single == null) {
-                        tokens.add(DigitToken(ch, rawIndex, false))
-                        literal.add(rawIndex)
-                    } else if (single.diacritic == Diacritic.HORN) {
-                        single.diacritic = Diacritic.NONE
-                        tokens.add(DigitToken(ch, rawIndex, false))
-                        literal.add(rawIndex)
-                    } else {
-                        single.diacritic = Diacritic.HORN
-                        tokens.add(DigitToken(ch, rawIndex, true))
-                        appliedStructural.add(rawIndex)
-                    }
-                    continue
+                    toggling = target.diacritic == wanted
+                    changes.add(target)
+                    newValues.add(if (toggling) Diacritic.NONE else wanted)
                 }
 
-                // Other structural modifiers apply to the compatible letter of the syllable,
-                // not necessarily the immediately preceding one ("toi6" -> "tôi", "van8" -> "văn",
-                // "dep9" -> "đẹp"). Pick the last compatible letter typed so far.
-                var target: Letter? = null
-                for (i in letters.indices.reversed()) {
-                    if (letters[i].base in COMPATIBLE[digit]!!) {
-                        target = letters[i]
-                        break
-                    }
-                }
+                val oldValues = changes.map { it.diacritic }
+                for (i in changes.indices) changes[i].diacritic = newValues[i]
 
-                if (target == null) {
+                if (!toggling && hasCoda(letters) && !isValidSyllable(letters)) {
+                    for (i in changes.indices) changes[i].diacritic = oldValues[i]
                     tokens.add(DigitToken(ch, rawIndex, false))
                     literal.add(rawIndex)
-                } else if (target.diacritic == wanted) {
-                    target.diacritic = Diacritic.NONE
+                } else if (toggling) {
                     tokens.add(DigitToken(ch, rawIndex, false))
                     literal.add(rawIndex)
                 } else {
-                    target.diacritic = wanted
                     tokens.add(DigitToken(ch, rawIndex, true))
                     appliedStructural.add(rawIndex)
                 }
@@ -382,10 +404,17 @@ object VNI {
         return sb.toString()
     }
 
+    private fun hasCoda(letters: List<Letter>): Boolean {
+        val start = vowelStart(letters)
+        if (start < 0) return false
+        val vowel = vowelString(letters, start) ?: return false
+        return start + vowel.length < letters.size
+    }
+
     /** Full syllable validity, mirroring UniKey's isValidCV/isValidVC/isValidCVC. */
     private fun isValidSyllable(letters: List<Letter>): Boolean {
         val onset = onsetOf(letters)
-        if (onset.isNotEmpty() && onset !in ONSETS) return false
+        if (onset.isNotEmpty() && onset !in ONSETS && onset.length > 1) return false
 
         val start = vowelStart(letters)
         if (start < 0 || start >= letters.size) return false
@@ -425,7 +454,7 @@ object VNI {
      */
     private fun isValidStructureContext(letters: List<Letter>): Boolean {
         val onset = onsetOf(letters)
-        if (onset.isNotEmpty() && onset !in ONSETS) return false
+        if (onset.isNotEmpty() && onset !in ONSETS && onset.length > 1) return false
         val start = vowelStart(letters)
         if (start < 0 || start >= letters.size) return true // consonant-only, e.g. "d9"
         val vowel = vowelString(letters, start) ?: return false
@@ -465,3 +494,4 @@ object VNI {
         Diacritic.STROKE -> Common.STROKE_MAP[base] ?: base
     }
 }
+
