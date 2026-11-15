@@ -138,7 +138,7 @@ val DefaultBottomRow = Row(
         TemplateOptionalZWNJKey,
         // No comma/period keys beside the spacebar. The spacebar takes one freed slot and the
         // Enter key takes the other (Custom1 = one regular slot wider than a functional key).
-        EnterKey(attributes = KeyAttributes(width = KeyWidth.Custom1))
+        TemplateEnterKey
     )
 )
 

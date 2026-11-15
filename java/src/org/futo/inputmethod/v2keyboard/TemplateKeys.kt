@@ -339,7 +339,7 @@ data class OptionalZWNJKey(
     }
 }
 
-val TemplateEnterKey = EnterKey()
+val TemplateEnterKey = EnterKey(attributes = KeyAttributes(width = KeyWidth.Custom1))
 val TemplateActionKey = ActionKey()
 val TemplateContextualKey = ContextualKey()
 val TemplateGapKey = GapKey()
