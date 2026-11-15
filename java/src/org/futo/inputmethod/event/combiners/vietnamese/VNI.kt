@@ -27,25 +27,82 @@ object VNI {
         9 to setOf('d')
     )
 
-    /** Legal Vietnamese syllable onsets (base letters, before any diacritics). */
-    private val VALID_ONSETS = setOf(
-        "", "b", "c", "ch", "d", "g", "gh", "gi", "h", "k", "kh", "l", "m",
+    // --- Tables ported from UniKey (x-unikey src/ukengine/ukengine.cpp) ---------------------
+
+    /** Legal onsets (CSeqList). */
+    private val ONSETS = setOf(
+        "b", "c", "ch", "d", "đ", "dz", "g", "gh", "gi", "gin", "h", "k", "kh", "l", "m",
         "n", "ng", "ngh", "nh", "p", "ph", "q", "qu", "r", "s", "t", "th", "tr", "v", "x"
     )
 
-    /** Legal Vietnamese vowel nuclei (with diacritics, as displayed lowercase). */
-    private val NUCLEI = setOf(
-        "a", "ă", "â", "e", "ê", "i", "o", "ô", "ơ", "u", "ư", "y",
-        "ai", "ao", "au", "ay", "âu", "ây", "eo", "êu",
-        "iê", "ie", "iu", "yê", "ye", "yêu", "iêu",
-        "oa", "oă", "oe", "oi", "ôi", "ơi", "oo", "oai", "oay", "oeo", "oao",
-        "ua", "uâ", "uê", "ue", "ui", "uô", "uo", "uơ", "uy", "uya", "uyê", "uyu",
-        "uây", "uay", "uôi", "uoi", "uou", "ươi", "ươu",
-        "ưa", "ưi", "ưu", "ươ"
+    /** Coda sequences that may end a syllable (CSeqList entries with suffix=true). */
+    private val CODA_SUFFIX = setOf("c", "ch", "m", "n", "ng", "nh", "p", "t")
+
+    /** Vowel sequences (VSeqList) with their `conSuffix` flag (nucleus may take a coda). */
+    private val VOWEL_CON_SUFFIX = mapOf(
+        "a" to true, "â" to true, "ă" to true, "e" to true, "ê" to true, "i" to true,
+        "o" to true, "ô" to true, "ơ" to true, "u" to true, "ư" to true, "y" to true,
+        "ai" to false, "ao" to false, "au" to false, "ay" to false, "âu" to false, "ây" to false,
+        "eo" to false, "eu" to false, "êu" to true,
+        "ia" to false, "ie" to true, "iê" to true, "iu" to false,
+        "oa" to true, "oă" to true, "oe" to true, "oi" to false, "ôi" to false, "ơi" to false,
+        "ua" to true, "uâ" to true, "ue" to true, "uê" to true, "ui" to false,
+        "uo" to true, "uô" to true, "uơ" to true, "uu" to false, "uy" to true,
+        "ưa" to false, "ưi" to false, "ưo" to true, "ươ" to true, "ưu" to false,
+        "ye" to true, "yê" to true,
+        "ieu" to false, "iêu" to false, "oai" to false, "oay" to false, "oeo" to false,
+        "uay" to false, "uây" to false, "uoi" to false, "uou" to false,
+        "uôi" to false, "uơi" to false, "uơu" to false,
+        "uya" to false, "uye" to true, "uyê" to true, "uyu" to false,
+        "ưoi" to false, "ưou" to false, "ươi" to false, "ươu" to false,
+        "yeu" to false, "yêu" to false
     )
 
-    /** Legal Vietnamese syllable codas. */
-    private val CODAS = setOf("", "c", "ch", "m", "n", "ng", "nh", "p", "t")
+    /** (vowel sequence, coda) pairs allowed by UniKey (VCPairList). */
+    private val VALID_VC: Set<String> = buildVcPairs()
+
+    private fun buildVcPairs(): Set<String> {
+        val pairs = HashSet<String>()
+        fun add(vowel: String, vararg codas: String) {
+            for (coda in codas) pairs.add(vowel + "|" + coda)
+        }
+        add("a", "c", "ch", "m", "n", "ng", "nh", "p", "t")
+        add("â", "c", "m", "n", "ng", "p", "t")
+        add("ă", "c", "m", "n", "ng", "p", "t")
+        add("e", "c", "ch", "m", "n", "ng", "nh", "p", "t")
+        add("ê", "c", "ch", "m", "n", "nh", "p", "t")
+        add("i", "c", "ch", "m", "n", "nh", "p", "t")
+        add("o", "c", "m", "n", "ng", "p", "t")
+        add("ô", "c", "m", "n", "ng", "p", "t")
+        add("ơ", "m", "n", "p", "t")
+        add("u", "c", "m", "n", "ng", "p", "t")
+        add("ư", "c", "m", "n", "ng", "t")
+        add("y", "t")
+        add("ie", "c", "m", "n", "ng", "p", "t")
+        add("iê", "c", "m", "n", "ng", "p", "t")
+        add("oa", "c", "ch", "m", "n", "ng", "nh", "p", "t")
+        add("oă", "c", "m", "n", "ng", "t")
+        add("oe", "n", "t")
+        add("ua", "n", "ng", "t")
+        add("uâ", "n", "ng", "t")
+        add("ue", "c", "ch", "n", "nh")
+        add("uê", "c", "ch", "n", "nh")
+        add("uo", "c", "m", "n", "ng", "p", "t")
+        add("uô", "c", "m", "n", "ng", "t")
+        add("ưo", "c", "m", "n", "ng", "p", "t")
+        add("ươ", "c", "m", "n", "ng", "p", "t")
+        add("uy", "c", "ch", "n", "nh", "p", "t")
+        add("ye", "m", "n", "ng", "p", "t")
+        add("yê", "m", "n", "ng", "t")
+        add("uye", "n", "t")
+        add("uyê", "n", "t")
+        return pairs
+    }
+
+    /** Vowels that may follow "k" (isValidCV). */
+    private val K_VOWELS = setOf("e", "i", "y", "ê", "eo", "êu", "ia", "ie", "iê", "ieu", "iêu")
+
+    // --- Runtime state ---------------------------------------------------------------------
 
     private class Letter(val base: Char, val upper: Boolean, var diacritic: Diacritic)
 
@@ -69,11 +126,6 @@ object VNI {
 
     /**
      * Result of converting a raw VNI key sequence.
-     *
-     * @param text the displayed (converted) text
-     * @param appliedToneIndices indices of digit characters consumed as tone marks
-     * @param appliedStructuralIndices indices of digit characters consumed as 6/7/8/9
-     * @param literalDigitIndices indices of digit characters emitted literally
      */
     data class Conversion(
         val text: String,
@@ -115,8 +167,8 @@ object VNI {
                         // (e.g. "h2" or "h2so4"): leave the whole thing exactly as typed.
                         escaped = true
                         break
-                    } else if (!hasValidOnset(letters) || !hasValidRhyme(letters)) {
-                        // Not a legal Vietnamese syllable (e.g. "chgu1", "aec5", "abng2"):
+                    } else if (!isValidSyllable(letters)) {
+                        // Not a legal Vietnamese syllable with this coda (e.g. "a8ch2", "o7c5"):
                         // keep the tone digit literal.
                         tokens.add(DigitToken(ch, rawIndex, false))
                         literal.add(rawIndex)
@@ -142,8 +194,8 @@ object VNI {
                     continue
                 }
 
-                if (!hasValidOnset(letters)) {
-                    // Not a legal Vietnamese syllable (e.g. "chgu7", "ghfa4"): keep it literal.
+                if (!isValidStructureContext(letters)) {
+                    // Non-Vietnamese syllable (e.g. "chgu7", "aeiou7"): keep it literal.
                     tokens.add(DigitToken(ch, rawIndex, false))
                     literal.add(rawIndex)
                     continue
@@ -163,7 +215,6 @@ object VNI {
                     }
                     if (hornU != null && hornO != null) {
                         if (hornU.diacritic == Diacritic.HORN && hornO.diacritic == Diacritic.HORN) {
-                            // Already "ươ": pressing 7 again toggles it off ("uo77" -> "uo7").
                             hornU.diacritic = Diacritic.NONE
                             hornO.diacritic = Diacritic.NONE
                             tokens.add(DigitToken(ch, rawIndex, false))
@@ -177,8 +228,6 @@ object VNI {
                         continue
                     }
 
-                    // No "uo" nucleus: horn a single letter. Prefer the first 'u' (so "uu7"
-                    // gives "ưu"), otherwise the first 'o'.
                     val single = letters.firstOrNull { it.base == 'u' }
                             ?: letters.firstOrNull { it.base == 'o' }
                     if (single == null) {
@@ -197,8 +246,8 @@ object VNI {
                 }
 
                 // Other structural modifiers apply to the compatible letter of the syllable,
-                // not necessarily the immediately preceding one: "toi6" -> "tôi", "van8" -> "văn",
-                // "dep9" -> "đẹp". Pick the last compatible letter typed so far.
+                // not necessarily the immediately preceding one ("toi6" -> "tôi", "van8" -> "văn",
+                // "dep9" -> "đẹp"). Pick the last compatible letter typed so far.
                 var target: Letter? = null
                 for (i in letters.indices.reversed()) {
                     if (letters[i].base in COMPATIBLE[digit]!!) {
@@ -208,11 +257,9 @@ object VNI {
                 }
 
                 if (target == null) {
-                    // Nothing to apply to (e.g. "u9", "a7"): emit the digit literally.
                     tokens.add(DigitToken(ch, rawIndex, false))
                     literal.add(rawIndex)
                 } else if (target.diacritic == wanted) {
-                    // Same diacritic twice: remove it and type the digit literally ("u77" -> "u7").
                     target.diacritic = Diacritic.NONE
                     tokens.add(DigitToken(ch, rawIndex, false))
                     literal.add(rawIndex)
@@ -224,7 +271,6 @@ object VNI {
                 continue
             }
 
-            // Any other character is kept as-is.
             tokens.add(DigitToken(ch, rawIndex, false))
             literal.add(rawIndex)
         }
@@ -251,9 +297,30 @@ object VNI {
 
         var tonePosition = -1
         if (tone != null && firstVowel >= 0 && count > 0 && firstVowel + count - 1 < chars.size) {
-            tonePosition = Common.getToneMarkPosition(chars.joinToString(""), firstVowel, count)
+            var toneChars = chars.joinToString("")
+            // If a coda was appended that makes the rhyme invalid (e.g. "ai" + "c"), UniKey keeps
+            // the tone where it was placed before the coda: on the open vowel ("áic", not "aíc").
+            val start = vowelStart(letters)
+            val vowel = if (start >= 0) vowelString(letters, start) else null
+            if (start >= 0 && vowel != null) {
+                val codaStart = start + vowel.length
+                if (codaStart < letters.size) {
+                    val coda = StringBuilder()
+                    var k = codaStart
+                    while (k < letters.size) {
+                        coda.append(letters[k].base)
+                        k++
+                    }
+                    val c = coda.toString()
+                    val vcOk = VOWEL_CON_SUFFIX[vowel] == true && c in CODA_SUFFIX &&
+                            (vowel + "|" + c) in VALID_VC
+                    if (!vcOk) {
+                        toneChars = chars.subList(0, codaStart).joinToString("")
+                    }
+                }
+            }
+            tonePosition = Common.getToneMarkPosition(toneChars, firstVowel, count)
         }
-        // Preserve the existing edge case: "gi5a" -> "gịa".
         if (input.lowercase() == "gi5a" && tone != null) tonePosition = 1
 
         val output = StringBuilder()
@@ -275,11 +342,99 @@ object VNI {
         return Conversion(output.toString(), appliedTone, appliedStructural, literal)
     }
 
+    // --- UniKey-style validity -------------------------------------------------------------
+
+    private fun onsetOf(letters: List<Letter>): String {
+        val onset = StringBuilder()
+        var i = 0
+        while (i < letters.size && letters[i].base !in Common.VOWELS) {
+            onset.append(charOf(letters[i].base, letters[i].diacritic))
+            i++
+        }
+        // "qu" and "gi" are onsets when followed by a vowel (gi only when another vowel follows).
+        if (i == 1 && letters[0].base == 'q' && letters.size >= 2 && letters[1].base == 'u') {
+            return "qu"
+        }
+        if (i == 1 && letters[0].base == 'g' && letters.size >= 3 && letters[1].base == 'i' &&
+                letters[2].base in Common.VOWELS) {
+            return "gi"
+        }
+        return onset.toString()
+    }
+
+    private fun vowelStart(letters: List<Letter>): Int {
+        val first = letters.indexOfFirst { it.base in Common.VOWELS }
+        if (first < 0) return -1
+        if (first == 1 && letters[0].base == 'q' && letters.size >= 2 && letters[1].base == 'u') return 2
+        if (first == 1 && letters[0].base == 'g' && letters.size >= 3 && letters[1].base == 'i' &&
+                letters[2].base in Common.VOWELS) return 2
+        return first
+    }
+
+    private fun vowelString(letters: List<Letter>, start: Int): String? {
+        val sb = StringBuilder()
+        var i = start
+        while (i < letters.size && letters[i].base in Common.VOWELS) {
+            if (sb.length >= 3) return null
+            sb.append(charOf(letters[i].base, letters[i].diacritic))
+            i++
+        }
+        return sb.toString()
+    }
+
+    /** Full syllable validity, mirroring UniKey's isValidCV/isValidVC/isValidCVC. */
+    private fun isValidSyllable(letters: List<Letter>): Boolean {
+        val onset = onsetOf(letters)
+        if (onset.isNotEmpty() && onset !in ONSETS) return false
+
+        val start = vowelStart(letters)
+        if (start < 0 || start >= letters.size) return false
+        val vowel = vowelString(letters, start) ?: return false
+        if (vowel !in VOWEL_CON_SUFFIX) return false
+
+        val coda = StringBuilder()
+        var i = start + vowel.length
+        while (i < letters.size) {
+            if (letters[i].base in Common.VOWELS) return false
+            coda.append(letters[i].base)
+            i++
+        }
+        val c = coda.toString()
+        if (c.isNotEmpty() && c !in ONSETS) return false
+
+        if (onset == "gi" && vowel.startsWith("i")) return false
+        if (onset == "qu" && vowel.startsWith("u")) return false
+        if (onset == "k" && vowel !in K_VOWELS) return false
+
+        if (c.isNotEmpty()) {
+            if (VOWEL_CON_SUFFIX[vowel] != true) return false
+            if (c !in CODA_SUFFIX) return false
+            if ((vowel + "|" + c) !in VALID_VC) {
+                // Exceptions from isValidCVC: quyn/quynh, gieng/giêng
+                if (onset == "qu" && vowel == "y" && (c == "n" || c == "nh")) return true
+                if (onset == "gi" && (vowel == "e" || vowel == "ê") && (c == "n" || c == "ng")) return true
+                return false
+            }
+        }
+        return true
+    }
+
+    /**
+     * Structural modifiers (6/7/8/9) may occur mid-word ("vie6t"), so only require a valid
+     * onset and a known vowel nucleus; the coda is not checked here.
+     */
+    private fun isValidStructureContext(letters: List<Letter>): Boolean {
+        val onset = onsetOf(letters)
+        if (onset.isNotEmpty() && onset !in ONSETS) return false
+        val start = vowelStart(letters)
+        if (start < 0 || start >= letters.size) return true // consonant-only, e.g. "d9"
+        val vowel = vowelString(letters, start) ?: return false
+        return vowel in VOWEL_CON_SUFFIX
+    }
+
     /**
      * Turn a Vietnamese word back into the VNI keystrokes that produce it, e.g.
      * "việt" -> "vie6t5", "quá" -> "qua1", "chão" -> "chao4", "đẹp" -> "d9ep5".
-     *
-     * The tone digit is emitted at the end of the word, which VNI accepts.
      */
     @JvmStatic
     fun vietnameseToVNI(text: String): String {
@@ -300,61 +455,6 @@ object VNI {
         }
         if (toneDigit != null) output.append(toneDigit)
         return output.toString()
-    }
-
-    /**
-     * Whether the consonant cluster before the first vowel is a legal Vietnamese onset.
-     * This keeps non-Vietnamese words literal: "chgu17" stays "chgu17", "ghfa4" stays "ghfa4",
-     * while "nga4" -> "ngã".
-     */
-    private fun hasValidOnset(letters: List<Letter>): Boolean {
-        val onset = StringBuilder()
-        for (letter in letters) {
-            if (letter.base in Common.VOWELS) break
-            onset.append(letter.base)
-        }
-        val value = onset.toString()
-        if (value.isEmpty()) return true
-        if (value == "q") {
-            // "qu" is valid; a bare "q" before another vowel is not.
-            return letters.size >= 2 && letters[0].base == 'q' && letters[1].base == 'u'
-        }
-        return value in VALID_ONSETS
-    }
-
-    /**
-     * Whether the part after the onset is a legal Vietnamese rhyme (vowel nucleus + coda).
-     * This rejects nonsense like "aeiou4", "abng2", "aec5".
-     */
-    private fun hasValidRhyme(letters: List<Letter>): Boolean {
-        var start = letters.indexOfFirst { it.base in Common.VOWELS }
-        if (start < 0) return true
-
-        // For "qu" and "gi", the u/i belongs to the onset when another vowel follows.
-        if (start == 1 && letters.size > 2) {
-            val a = letters[0].base
-            val b = letters[1].base
-            if (((a == 'q' && b == 'u') || (a == 'g' && b == 'i')) &&
-                    letters[2].base in Common.VOWELS) {
-                start = 2
-            }
-        }
-
-        val nucleus = StringBuilder()
-        var i = start
-        while (i < letters.size && letters[i].base in Common.VOWELS) {
-            nucleus.append(charOf(letters[i].base, letters[i].diacritic))
-            i++
-        }
-
-        val coda = StringBuilder()
-        while (i < letters.size) {
-            if (letters[i].base in Common.VOWELS) return false
-            coda.append(letters[i].base)
-            i++
-        }
-
-        return nucleus.toString() in NUCLEI && coda.toString() in CODAS
     }
 
     private fun charOf(base: Char, diacritic: Diacritic): Char = when (diacritic) {
