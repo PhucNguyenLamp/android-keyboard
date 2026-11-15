@@ -230,8 +230,15 @@ object VNI {
                     continue
                 }
 
-                // Digits 6/7/8 modify the nucleus. If a coda is already typed, the resulting
-                // syllable must be valid ("uoc7" -> "ước" but "oc7" -> "oc7").
+                // Digits 6/7/8 modify the nucleus (after the onset). The resulting syllable must
+                // be valid even without a coda ("toa6" -> "toa6", "vie6" -> "viê", "oc7" -> "oc7").
+                val nucleusStart = vowelStart(letters)
+                if (nucleusStart < 0) {
+                    tokens.add(DigitToken(ch, rawIndex, false))
+                    literal.add(rawIndex)
+                    continue
+                }
+
                 val changes = ArrayList<Letter>()
                 val newValues = ArrayList<Diacritic>()
                 var toggling = false
@@ -239,7 +246,7 @@ object VNI {
                 if (digit == 7) {
                     var hornU: Letter? = null
                     var hornO: Letter? = null
-                    for (i in 0 until letters.size - 1) {
+                    for (i in nucleusStart until letters.size - 1) {
                         if (letters[i].base == 'u' && letters[i + 1].base == 'o') {
                             hornU = letters[i]
                             hornO = letters[i + 1]
@@ -247,13 +254,37 @@ object VNI {
                         }
                     }
                     if (hornU != null && hornO != null) {
-                        toggling = hornU.diacritic == Diacritic.HORN && hornO.diacritic == Diacritic.HORN
-                        val value = if (toggling) Diacritic.NONE else Diacritic.HORN
-                        changes.add(hornU); newValues.add(value)
-                        changes.add(hornO); newValues.add(value)
+                        // With an onset, the exact "uo" nucleus and no coda, UniKey horns only the
+                        // o ("huo7" -> "huơ"); otherwise both ("uo7" -> "ươ").
+                        val nucleus = vowelString(letters, nucleusStart)
+                        val hornOnlyO = nucleusStart > 0 && nucleus == "uo" && codaOf(letters).isEmpty()
+                        if (hornOnlyO) {
+                            toggling = hornO.diacritic == Diacritic.HORN
+                            changes.add(hornO)
+                            newValues.add(if (toggling) Diacritic.NONE else Diacritic.HORN)
+                        } else {
+                            toggling = hornU.diacritic == Diacritic.HORN && hornO.diacritic == Diacritic.HORN
+                            val value = if (toggling) Diacritic.NONE else Diacritic.HORN
+                            changes.add(hornU); newValues.add(value)
+                            changes.add(hornO); newValues.add(value)
+                        }
                     } else {
-                        val single = letters.firstOrNull { it.base == 'u' }
-                                ?: letters.firstOrNull { it.base == 'o' }
+                        // Prefer the first 'u' in the nucleus, otherwise the first 'o'.
+                        var single: Letter? = null
+                        for (i in nucleusStart until letters.size) {
+                            if (letters[i].base == 'u') {
+                                single = letters[i]
+                                break
+                            }
+                        }
+                        if (single == null) {
+                            for (i in nucleusStart until letters.size) {
+                                if (letters[i].base == 'o') {
+                                    single = letters[i]
+                                    break
+                                }
+                            }
+                        }
                         if (single == null) {
                             tokens.add(DigitToken(ch, rawIndex, false))
                             literal.add(rawIndex)
@@ -266,7 +297,7 @@ object VNI {
                 } else {
                     var target: Letter? = null
                     for (i in letters.indices.reversed()) {
-                        if (letters[i].base in COMPATIBLE[digit]!!) {
+                        if (i >= nucleusStart && letters[i].base in COMPATIBLE[digit]!!) {
                             target = letters[i]
                             break
                         }
@@ -284,7 +315,7 @@ object VNI {
                 val oldValues = changes.map { it.diacritic }
                 for (i in changes.indices) changes[i].diacritic = newValues[i]
 
-                if (!toggling && hasCoda(letters) && !isValidSyllable(letters)) {
+                if (!toggling && !isValidSyllable(letters)) {
                     for (i in changes.indices) changes[i].diacritic = oldValues[i]
                     tokens.add(DigitToken(ch, rawIndex, false))
                     literal.add(rawIndex)
