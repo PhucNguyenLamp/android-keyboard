@@ -133,12 +133,11 @@ val DefaultNumberRowClassic = Row(
 val DefaultBottomRow = Row(
     bottom = listOf(
         TemplateSymbolsKey,
-        ContextualKey(fallbackKey = BaseKey(",")),
         TemplateActionKey,
         TemplateSpaceKey,
         TemplateOptionalZWNJKey,
-        TemplatePeriodKey,
-        TemplateEnterKey
+        // No comma/period keys beside the spacebar; Enter grows into that space instead.
+        EnterKey(attributes = KeyAttributes(width = KeyWidth.Grow))
     )
 )
 
