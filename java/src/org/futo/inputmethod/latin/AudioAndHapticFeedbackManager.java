@@ -60,7 +60,10 @@ public final class AudioAndHapticFeedbackManager {
 
     public void performHapticAndAudioFeedback(final int code,
             final View viewToPerformHapticFeedbackOn) {
-        performHapticFeedback(viewToPerformHapticFeedbackOn, false);
+        // The delete/backspace key should not vibrate; only normal keystrokes do.
+        if (code != Constants.CODE_DELETE) {
+            performHapticFeedback(viewToPerformHapticFeedbackOn, false);
+        }
         performAudioFeedback(code);
     }
 

@@ -866,7 +866,10 @@ public class LatinIMELegacy implements KeyboardActionListener,
         }
         final AudioAndHapticFeedbackManager feedbackManager =
                 AudioAndHapticFeedbackManager.getInstance();
-        feedbackManager.performHapticFeedback(keyboardView, repeatCount > 0);
+        // The delete/backspace key should not vibrate; only normal keystrokes do.
+        if (code != Constants.CODE_DELETE) {
+            feedbackManager.performHapticFeedback(keyboardView, repeatCount > 0);
+        }
         feedbackManager.performAudioFeedback(code);
     }
 
