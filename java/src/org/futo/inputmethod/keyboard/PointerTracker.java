@@ -911,7 +911,12 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         // onPress() to notify that the new key is being pressed.
         processDraggingFingerOutFromOldKey(oldKey);
         startRepeatKey(key);
-        if (mIsAllowedDraggingFinger) {
+        // Action keys (e.g. the bottom emoji key) only trigger on a direct press, not when the
+        // finger slides in from another key (same as the ?123 / caps-lock keys).
+        final int newCode = key.getCode();
+        final boolean isActionKey = newCode >= Constants.CODE_ACTION_0
+                && newCode <= Constants.CODE_ACTION_MAX;
+        if (mIsAllowedDraggingFinger && !isActionKey) {
             processDraggingFingerInToNewKey(key, x, y, eventTime);
         }
         // HACK: On some devices, quick successive touches may be reported as a sudden move by
