@@ -1429,24 +1429,7 @@ fun BoxScope.ActionBarWithExpandableCandidates(
                     )
                 }
 
-                IconButton(
-                    onClick = {
-                        if(suggestionsExpansion.floatValue < 0.5f) {
-                            suggestionsExpansion.floatValue = 1.0f
-                        } else {
-                            suggestionsExpansion.floatValue = 0.0f
-                        }
-                    },
-                    modifier = Modifier.width(40.dp)
-                ) {
-                    Icon(
-                        Icons.Default.KeyboardArrowUp,
-                        contentDescription = null,
-                        modifier = Modifier.rotate(
-                            suggestionsExpansion.floatValue * -180.0f
-                        )
-                    )
-                }
+
             }
         }
 
