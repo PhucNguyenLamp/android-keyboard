@@ -172,6 +172,11 @@ object VNI {
                         // keep the tone digit literal.
                         tokens.add(DigitToken(ch, rawIndex, false))
                         literal.add(rawIndex)
+                    } else if (checkedCodaDisallowsTone(letters, toneMark)) {
+                        // Checked syllables (ending in c/ch/p/t) only take sắc or nặng, so
+                        // "ac2"/"ach3"/"ap4" stay literal like UniKey.
+                        tokens.add(DigitToken(ch, rawIndex, false))
+                        literal.add(rawIndex)
                     } else if (currentTone == toneMark) {
                         // Same tone twice: remove it and type the digit literally ("la12344" -> "la4").
                         currentTone = null
@@ -302,46 +307,20 @@ object VNI {
             return Conversion(input, emptySet(), emptySet(), literalIndices)
         }
 
-        val chars = letters.map { charOf(it.base, it.diacritic) }
-
-        var firstVowel = letters.indexOfFirst { it.base in Common.VOWELS }
-        var count = letters.count { it.base in Common.VOWELS }
-
-        // "qu" and "gi" act as consonants when another vowel follows.
-        if (count > 1 && letters.size >= 2 && firstVowel == 1) {
-            val first = letters[0].base
-            val second = letters[1].base
-            if ((first == 'q' && second == 'u') || (first == 'g' && second == 'i')) {
-                firstVowel++
-                count--
-            }
-        }
-
         var tonePosition = -1
-        if (tone != null && firstVowel >= 0 && count > 0 && firstVowel + count - 1 < chars.size) {
-            var toneChars = chars.joinToString("")
-            // If a coda was appended that makes the rhyme invalid (e.g. "ai" + "c"), UniKey keeps
-            // the tone where it was placed before the coda: on the open vowel ("áic", not "aíc").
+        if (tone != null) {
             val start = vowelStart(letters)
             val vowel = if (start >= 0) vowelString(letters, start) else null
-            if (start >= 0 && vowel != null) {
-                val codaStart = start + vowel.length
-                if (codaStart < letters.size) {
-                    val coda = StringBuilder()
-                    var k = codaStart
-                    while (k < letters.size) {
-                        coda.append(letters[k].base)
-                        k++
-                    }
-                    val c = coda.toString()
-                    val vcOk = VOWEL_CON_SUFFIX[vowel] == true && c in CODA_SUFFIX &&
-                            (vowel + "|" + c) in VALID_VC
-                    if (!vcOk) {
-                        toneChars = chars.subList(0, codaStart).joinToString("")
-                    }
-                }
+            if (start >= 0 && vowel != null && vowel.isNotEmpty()) {
+                val coda = codaOf(letters)
+                val vcOk = coda.isEmpty() ||
+                        (VOWEL_CON_SUFFIX[vowel] == true && coda in CODA_SUFFIX &&
+                                (vowel + "|" + coda) in VALID_VC)
+                // If a coda makes the rhyme invalid ("ai" + "c"), UniKey placed the tone while the
+                // vowel was open, so treat it as terminated ("áic", not "aíc").
+                val terminated = (start + vowel.length == letters.size) || !vcOk
+                tonePosition = start + unikeyTonePosition(vowel, terminated)
             }
-            tonePosition = Common.getToneMarkPosition(toneChars, firstVowel, count)
         }
         if (input.lowercase() == "gi5a" && tone != null) tonePosition = 1
 
@@ -409,6 +388,54 @@ object VNI {
         if (start < 0) return false
         val vowel = vowelString(letters, start) ?: return false
         return start + vowel.length < letters.size
+    }
+
+    private fun codaOf(letters: List<Letter>): String {
+        val start = vowelStart(letters)
+        if (start < 0) return ""
+        val vowel = vowelString(letters, start) ?: return ""
+        val sb = StringBuilder()
+        var i = start + vowel.length
+        while (i < letters.size) {
+            sb.append(letters[i].base)
+            i++
+        }
+        return sb.toString()
+    }
+
+    /** Port of UniKey's UkEngine::getTonePosition (with modernStyle for oa/oe/uy). */
+    private fun unikeyTonePosition(nucleus: String, terminated: Boolean): Int {
+        if (nucleus.length <= 1) return 0
+
+        for (i in nucleus.indices) {
+            val c = nucleus[i]
+            if (c == 'â' || c == 'ê' || c == 'ô') return i // roofPos
+        }
+
+        var hook = -1
+        for (i in nucleus.indices) {
+            val c = nucleus[i]
+            if (c == 'ơ' || c == 'ư') {
+                hook = i
+                break
+            }
+        }
+        if (hook >= 0) {
+            // Special case in UniKey for u+o horn nuclei: put it on the ơ.
+            if (nucleus == "ươ" || nucleus == "ươi" || nucleus == "ươu") return 1
+            return hook
+        }
+
+        if (nucleus.length >= 3) return 1
+        if (nucleus == "oa" || nucleus == "oe" || nucleus == "uy") return 1
+        return if (terminated) 0 else 1
+    }
+
+    /** UniKey: c/ch/p/t codas only allow sắc and nặng, not huyền/hỏi/ngã. */
+    private fun checkedCodaDisallowsTone(letters: List<Letter>, tone: ToneMark): Boolean {
+        val coda = codaOf(letters)
+        if (coda != "c" && coda != "ch" && coda != "p" && coda != "t") return false
+        return tone == ToneMark.GRAVE || tone == ToneMark.HOOK || tone == ToneMark.TILDE
     }
 
     /** Full syllable validity, mirroring UniKey's isValidCV/isValidVC/isValidCVC. */
