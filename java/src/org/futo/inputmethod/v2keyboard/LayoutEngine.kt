@@ -210,6 +210,12 @@ data class LayoutEngine(
             it.value * layoutWidth
         }.toMutableMap()
 
+        // Enter uses Custom1: one regular key slot wider than a bottom-row functional key.
+        rowWidths.putIfAbsent(
+            KeyWidth.Custom1,
+            layoutWidth * keyboard.minimumBottomRowFunctionalKeyWidth + regularKeyWidth
+        )
+
 
         // Special case: shrink regular key width for this row, if needed to fit functional keys
         val localRegularKeyWidth = run {
