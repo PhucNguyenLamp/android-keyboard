@@ -869,15 +869,6 @@ fun ActionBar(
                 .weight(1.0f), color = actionBarColor()
         ) {
             Row(Modifier.safeKeyboardPadding()) {
-                ExpandActionsButton(isActionsExpanded) {
-                    toggleActionsExpanded()
-
-                    keyboardManagerForAction?.performHapticAndAudioFeedback(
-                        Constants.CODE_TAB,
-                        view
-                    )
-                }
-
                 if(oldActionBar.value && isActionsExpanded) {
                     Box(modifier = Modifier
                         .weight(1.0f)
@@ -1249,19 +1240,9 @@ private fun RowScope.InlineCandidates(
             verticalAlignment = CenterVertically,
             state = lazyListState
         ) {
-            item {
-                val manager = LocalManager.current
-                if(closeActionWindow != null) {
+            if (closeActionWindow != null) {
+                item {
                     CloseActionWindowButton(closeActionWindow)
-                } else {
-                    ExpandActionsButton(isActionsExpanded) {
-                        toggleActionsExpanded()
-
-                        manager.performHapticAndAudioFeedback(
-                            Constants.CODE_TAB,
-                            view
-                        )
-                    }
                 }
             }
             itemsIndexed(wordList) { i, it ->
