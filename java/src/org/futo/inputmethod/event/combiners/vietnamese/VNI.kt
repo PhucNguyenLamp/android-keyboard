@@ -194,6 +194,12 @@ object VNI {
 
                 val wanted = STRUCTURAL[ch]
                 if (wanted == null) {
+                    if (ch == '0') {
+                        // "0" cancels conversion for the whole word (UniKey/EVKey behaviour),
+                        // so "a01" stays "a01".
+                        escaped = true
+                        break
+                    }
                     tokens.add(DigitToken(ch, rawIndex, false))
                     literal.add(rawIndex)
                     continue
@@ -527,6 +533,7 @@ object VNI {
     fun vietnameseToVNI(text: String): String {
         val output = StringBuilder()
         var toneDigit: Char? = null
+        var afterLastVowel = -1
         for (c in text) {
             val toneEntry = REVERSE_TONE[c]
             val withoutTone = toneEntry?.first ?: c
@@ -539,8 +546,21 @@ object VNI {
             } else {
                 output.append(withoutTone)
             }
+
+            val baseForVowelCheck = diacriticEntry?.first ?: withoutTone
+            if (baseForVowelCheck.lowercaseChar() in Common.VOWELS) {
+                afterLastVowel = output.length
+            }
         }
-        if (toneDigit != null) output.append(toneDigit)
+        if (toneDigit != null) {
+            // Insert the tone right after the nucleus (before the coda) so re-parsing still
+            // validates: "dũngchhh" -> "du4ngchhh", not "dungchhh4".
+            if (afterLastVowel in 0..output.length) {
+                output.insert(afterLastVowel, toneDigit)
+            } else {
+                output.append(toneDigit)
+            }
+        }
         return output.toString()
     }
 
