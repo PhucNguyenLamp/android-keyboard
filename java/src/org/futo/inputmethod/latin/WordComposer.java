@@ -125,9 +125,12 @@ public final class WordComposer {
     }
 
     public void setCombiners(@NotNull List<@NotNull CombinerKind> combiners) {
+        if (mCombinerKinds.equals(combiners)) {
+            return;
+        }
         mCombinerChain = new CombinerChain(combiners,
                 mCombinerChain.getComposingWordWithCombiningFeedback().toString());
-        mCombinerKinds = combiners;
+        mCombinerKinds = new ArrayList<>(combiners);
     }
 
     public boolean hasVniCombiner() {
