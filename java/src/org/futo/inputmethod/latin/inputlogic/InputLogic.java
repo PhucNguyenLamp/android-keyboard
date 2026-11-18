@@ -713,6 +713,15 @@ public final class InputLogic {
             }
             currentEvent = currentEvent.mNextEvent;
         }
+        // If the last backspace deleted the separator after a Vietnamese word, reopen that word
+        // immediately so following edits (backspace, tone keys) apply to it, even with
+        // suggestions disabled.
+        if (mReopenVietnameseWordOnNextKey) {
+            mReopenVietnameseWordOnNextKey = false;
+            if (!mWordComposer.isComposingWord() && !mConnection.hasSelection()) {
+                resetComposingWord(settingsValues, true);
+            }
+        }
         // Try to record the word being corrected when the user enters a word character or
         // the backspace key.
         if (!mConnection.hasSlowInputConnection() && !mWordComposer.isComposingWord()
