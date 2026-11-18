@@ -452,7 +452,8 @@ object VNI {
         var hook = -1
         for (i in nucleus.indices) {
             val c = nucleus[i]
-            if (c == 'ơ' || c == 'ư') {
+            // UniKey's hookPos includes the breve (ă), horned o (ơ), and horned u (ư).
+            if (c == 'ă' || c == 'ơ' || c == 'ư') {
                 hook = i
                 break
             }
