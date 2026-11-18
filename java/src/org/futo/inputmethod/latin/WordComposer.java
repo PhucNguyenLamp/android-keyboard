@@ -113,8 +113,13 @@ public final class WordComposer {
     public void restartCombining(final String combiningSpec) {
         final String nonNullCombiningSpec = null == combiningSpec ? "" : combiningSpec;
         if (!nonNullCombiningSpec.equals(mCombiningSpec)) {
-            mCombinerChain = new CombinerChain(
-                    mCombinerChain.getComposingWordWithCombiningFeedback().toString());
+            final String initialText = mCombinerChain.getComposingWordWithCombiningFeedback().toString();
+            // Keep combiners selected by the active v2 layout (e.g. VNI) across input restarts.
+            // The legacy subtype combining spec can change on refocus, but must not replace a
+            // layout-provided combiner chain with the dead-key-only default.
+            mCombinerChain = mCombinerKinds.isEmpty()
+                    ? new CombinerChain(initialText)
+                    : new CombinerChain(mCombinerKinds, initialText);
             mCombiningSpec = nonNullCombiningSpec;
         }
     }
